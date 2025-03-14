@@ -126,7 +126,7 @@ For better performance:
 - Consider batch processing for offline video analysis
 
 ## Acknowledgments
-- [Yolo-3d](https://github.com/niconielsen32/YOLO-3D) for the inital scripts
+- [Yolo-3d](https://github.com/niconielsen32/YOLO-3D) for the initial scripts
 
 - [Ultralytics](https://github.com/ultralytics/ultralytics) for YOLOv11 and SAM implementations
 - [Depth Anything](https://github.com/LiheYoung/Depth-Anything) for the depth estimation model
