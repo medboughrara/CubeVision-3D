@@ -1,1 +1,1 @@
-# Yolo-3d-GUI
+# Yolo-3D-GUI
