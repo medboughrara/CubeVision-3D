@@ -1,0 +1,8 @@
+# Ignore model files
+*.pt
+*.pth
+*.h5
+*.onnx
+*.tflite
+*.pb
+*.weights
