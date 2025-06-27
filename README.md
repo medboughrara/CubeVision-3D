@@ -1,6 +1,6 @@
 # CubeVision 3D: Real-Time 3D Cube Detection, Logging, and MQTT Integration
 
-![CubeVision 3D Demo](assets/demo.gif)
+![CubeVision 3D Demo](assets/)
 
 CubeVision 3D is an advanced computer vision system for real-time detection, 3D localization, and color classification of cubes using YOLOv11, Depth Anything v2, and SAM 2.0. It features a modern GUI, detection history logging, and MQTT integration for robotics and IoT applications.
 
