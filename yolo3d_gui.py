@@ -1,16 +1,18 @@
 #!/usr/bin/env python3
 import os
+import datetime
 import sys
 import cv2
 import time
 import numpy as np
 import torch
 import threading
+import csv
 from pathlib import Path
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
                            QLabel, QPushButton, QComboBox, QFileDialog, QSlider, QCheckBox,
                            QTabWidget, QGroupBox, QGridLayout, QProgressBar, QSpinBox,
-                           QDoubleSpinBox, QSplitter, QFrame, QStatusBar, QMessageBox)
+                           QDoubleSpinBox, QSplitter, QFrame, QStatusBar, QMessageBox, QLineEdit)
 from PyQt5.QtCore import Qt, QTimer, pyqtSignal, QThread, QSize
 from PyQt5.QtGui import QImage, QPixmap, QIcon, QFont, QColor, QPalette
 import torch
@@ -25,6 +27,7 @@ try:
 except ImportError:
     SEGMENTATION_AVAILABLE = False
     print("Segmentation module not available")
+from detection_history import DetectionHistory  # Make sure this import is present
 
 # Worker thread for video processing
 class VideoProcessingThread(QThread):
@@ -500,6 +503,10 @@ class YOLO3DGui(QMainWindow):
         # Show the window
         self.show()
         
+        self.detection_history = DetectionHistory()  # <-- Add this line
+        self.detection_csv_path = "detection_history.csv"  # <-- Add this line
+        self.last_logged_class_id = None  # <-- Add this line
+        
     def create_control_panel(self):
         """Create the left control panel"""
         control_panel = QWidget()
@@ -518,14 +525,22 @@ class YOLO3DGui(QMainWindow):
         self.input_browse.clicked.connect(self.browse_input)
         self.camera_button = QPushButton("Use Camera")
         self.camera_button.clicked.connect(self.use_camera)
-        
+        self.http_label = QLabel("HTTP URL:")
+        self.http_input = QLineEdit()
+        self.http_input.setPlaceholderText("http://<ip>:<port>/video")
+        self.http_button = QPushButton("Use HTTP Camera")
+        self.http_button.clicked.connect(self.use_http_camera)
+
         input_layout.addWidget(self.input_label)
         input_layout.addWidget(self.input_path, 1)
-        
+
         input_buttons = QHBoxLayout()
         input_buttons.addWidget(self.input_browse)
         input_buttons.addWidget(self.camera_button)
-        
+        input_buttons.addWidget(self.http_label)
+        input_buttons.addWidget(self.http_input)
+        input_buttons.addWidget(self.http_button)
+
         io_layout.addLayout(input_layout)
         io_layout.addLayout(input_buttons)
         
@@ -580,13 +595,15 @@ class YOLO3DGui(QMainWindow):
         # Device selection
         models_layout.addWidget(QLabel("Device:"), 3, 0)
         self.device_combo = QComboBox()
-        available_devices = ["cpu"]
-        if torch.cuda.is_available():
-            available_devices.append("cuda")
+        available_devices = ["cpu", "NVIDIA GeForce RTX 3050 (CUDA)"]
         if hasattr(torch, 'backends') and hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
             available_devices.append("mps")
         self.device_combo.addItems(available_devices)
-        self.device_combo.setCurrentText(self.config['device'])
+        # Set current device based on config
+        if self.config['device'] == 'cuda':
+            self.device_combo.setCurrentText("NVIDIA GeForce RTX 3050 (CUDA)")
+        else:
+            self.device_combo.setCurrentText(self.config['device'])
         self.device_combo.currentTextChanged.connect(self.update_config)
         models_layout.addWidget(self.device_combo, 3, 1)
         
@@ -810,8 +827,12 @@ class YOLO3DGui(QMainWindow):
             self.config['sam_model_name'] = self.sam_combo.currentText()
         
         # Update device
-        self.config['device'] = self.device_combo.currentText()
-        self.device_label.setText(f"Device: {self.config['device']}")
+        selected_device = self.device_combo.currentText()
+        if selected_device == "NVIDIA GeForce RTX 3050 (CUDA)":
+            self.config['device'] = 'cuda'
+        else:
+            self.config['device'] = selected_device
+        self.device_label.setText(f"Device: {self.device_combo.currentText()}")
         
         # Update thresholds
         self.config['conf_threshold'] = self.conf_slider.value() / 100
@@ -853,6 +874,17 @@ class YOLO3DGui(QMainWindow):
         self.input_path.setText("Camera (0)")
         self.status_label.setText("Using default camera")
         self.start_button.setEnabled(True)
+    
+    def use_http_camera(self):
+        """Set HTTP camera as input source"""
+        url = self.http_input.text().strip()
+        if url.startswith("http"):
+            self.config['source'] = url
+            self.input_path.setText(f"HTTP Camera: {url}")
+            self.status_label.setText(f"Using HTTP camera: {url}")
+            self.start_button.setEnabled(True)
+        else:
+            QMessageBox.warning(self, "Invalid URL", "Please enter a valid HTTP camera URL.")
     
     def browse_output(self):
         """Open file dialog to select output path"""
@@ -969,6 +1001,32 @@ class YOLO3DGui(QMainWindow):
         # Enable frame saving
         self.save_frame_button.setEnabled(True)
     
+        # --- Detection history logging ---
+        if 'detections' in result and result['detections']:
+            for det in result['detections']:
+                bbox, score, class_id, obj_id = det
+                if class_id in [0, 1, 2]:
+                    # Only log if class_id is different from the last logged one
+                    if class_id != self.last_logged_class_id:
+                        x_center = int((bbox[0] + bbox[2]) / 2)
+                        y_center = int((bbox[1] + bbox[3]) / 2)
+                        detection_record = {
+                            "timestamp": datetime.datetime.now().isoformat(),
+                            "class_id": class_id,
+                            "x": x_center,
+                            "y": y_center
+                        }
+                        self.detection_history.add(detection_record)
+                        file_exists = os.path.isfile(self.detection_csv_path)
+                        with open(self.detection_csv_path, 'a', newline='') as csvfile:
+                            writer = csv.DictWriter(csvfile, fieldnames=detection_record.keys())
+                            if not file_exists:
+                                writer.writeheader()
+                            writer.writerow(detection_record)
+                        self.last_logged_class_id = class_id
+                break  # Only check the first detection per frame
+        # --- End detection history logging ---
+
     def update_display(self):
         """Update display with current frame"""
         if self.current_frame is None:

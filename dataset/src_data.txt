@@ -1,0 +1,3 @@
+https://app.roboflow.com/med-ty4ux/red-green-blue-cube-detection-g3eqf/1
+
+yolo detect train model=../yolo11n.pt data=data.yaml epochs=100 imgsz=640

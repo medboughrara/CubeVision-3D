@@ -6,6 +6,7 @@ import cv2
 import numpy as np
 import torch
 from pathlib import Path
+import argparse
 
 # Set MPS fallback for operations not supported on Apple Silicon
 if hasattr(torch, 'backends') and hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
@@ -24,7 +25,7 @@ def main():
     # ===============================================
     
     # Input/Output
-    source = "test.mp4"  # Path to input video file or webcam index (0 for default camera)
+    #source = "test.mp4"  # Path to input video file or webcam index (0 for default camera)
     output_path = "output.mp4"  # Path to output video file
     
     # Model settings
@@ -109,11 +110,10 @@ def main():
         bev = BirdEyeView(scale=60, size=(300, 300))  # Increased scale to spread objects out
     
     # Open video source
-    try:
-        if isinstance(source, str) and source.isdigit():
-            source = int(source)  # Convert string number to integer for webcam
-    except ValueError:
-        pass  # Keep as string (for video file)
+    source = "0"
+    # Convert webcam index string to int if needed
+    if isinstance(source, str) and source.isdigit():
+        source = int(source)
     
     print(f"Opening video source: {source}")
     cap = cv2.VideoCapture(source)
