@@ -6,3 +6,8 @@
 *.tflite
 *.pb
 *.weights
+
+# Ignore Python virtual environments
+.venv/
+.venv310/
+venv/
